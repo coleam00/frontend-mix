@@ -1,7 +1,7 @@
 ---
 name: frontend-mix-plan
 description: Plan a full-stack web application by producing a three-section spec (UI / Integration / Deployment) that downstream provider-specific sessions can execute. Use this skill in a Claude Code session running Opus when you want to plan a build that will be implemented by mixing providers - Gemini designing the UI from your copy, Opus wiring the integrations. Triggers on "plan a frontend", "plan the app for mixed-provider build", "frontend-mix plan", or when given a spec markdown to turn into an actionable plan.
-argument-hint: <path-to-spec.md> [run-name]
+argument-hint: <path-to-spec.md | description of the app> [run-name]
 ---
 
 # Frontend-Mix · Plan
@@ -12,11 +12,11 @@ You are the **planning** step of a manual mixed-provider build. Reasoning-heavy 
 
 `$ARGUMENTS` is one of:
 
-- `<absolute-path-to-spec.md>` - the spec file you'll plan from (preferred form)
-- `<absolute-path-to-spec.md> <run-name>` - same, plus an explicit run-name slug for the artifact filename
-- A free-form description of the app, if no spec file exists
+- An absolute path to a spec markdown file (preferred form)
+- A free-form description of the app you want to build (use this if no spec file exists yet)
+- A spec path followed by an explicit run-name slug, space-separated
 
-If no path is present and no inline description is given, ask the user for one. Do not invent requirements.
+If `$ARGUMENTS` is empty, ask the user what they want to build. Do not invent requirements.
 
 ## STEP 0 - Resolve inputs (do this FIRST)
 

@@ -10,18 +10,18 @@ You are the **escalation** step for validation failures the prior Sonnet session
 
 ## Arguments
 
-`$ARGUMENTS` contains TWO absolute paths, space-separated:
+Two paths come in via `$ARGUMENTS`, space-separated:
 
-1. Path to `<run-name>-validation-issues.md` (your work list)
-2. Path to `<run-name>-plan.md` (for SECTION B context - what was supposed to be wired up)
+1. The path to `<run-name>-validation-issues.md` (your work list)
+2. The path to `<run-name>-plan.md` (for SECTION B context: what was supposed to be wired up)
 
-Example:
+Example value of `$ARGUMENTS`:
 
 ```
 .claude/artifacts/acme-saas-landing-validation-issues.md .claude/artifacts/acme-saas-landing-plan.md
 ```
 
-If either path is missing, ask the user for it. Do not work from memory.
+If either is missing, ask the user for it. Do not work from memory.
 
 ## STEP 0 - Read inputs and extract run-name (do this FIRST)
 

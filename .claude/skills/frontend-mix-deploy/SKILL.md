@@ -10,18 +10,18 @@ You are the **deploy** step of a manual mixed-provider build.
 
 ## Arguments
 
-`$ARGUMENTS` contains TWO absolute paths, space-separated:
+Two paths come in via `$ARGUMENTS`, space-separated:
 
-1. Path to `<run-name>-plan.md` (for SECTION C)
-2. Path to EITHER `<run-name>-validation-summary.md` (clean run) OR `<run-name>-resolution-summary.md` (after fix-validation)
+1. The path to `<run-name>-plan.md` (for SECTION C)
+2. The path to EITHER `<run-name>-validation-summary.md` (clean run) OR `<run-name>-resolution-summary.md` (after fix-validation)
 
-Example:
+Example value of `$ARGUMENTS`:
 
 ```
 .claude/artifacts/acme-saas-landing-plan.md .claude/artifacts/acme-saas-landing-resolution-summary.md
 ```
 
-If either path is missing, ask the user. Do not deploy a build you cannot confirm is clean.
+If either is missing, ask the user. Do not deploy a build you cannot confirm is clean.
 
 ## STEP 0 - Read inputs and extract run-name (do this FIRST)
 

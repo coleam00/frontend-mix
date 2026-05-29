@@ -10,7 +10,7 @@ You are the **UI design** step of a manual mixed-provider build. This step is be
 
 ## Arguments
 
-`$ARGUMENTS` is a single absolute path to the plan markdown produced by the `frontend-mix-plan` skill, e.g.:
+The path to the plan markdown (produced by `frontend-mix-plan`) comes in via `$ARGUMENTS`. Example value of `$ARGUMENTS`:
 
 ```
 .claude/artifacts/acme-saas-landing-plan.md
@@ -18,7 +18,7 @@ You are the **UI design** step of a manual mixed-provider build. This step is be
 
 The filename prefix (everything before `-plan.md`) is the **run-name**. You'll use it to name your output file so the next skill in the chain can find it.
 
-If `$ARGUMENTS` is empty or not a path, ask the user for the plan path. Do not proceed without it.
+If `$ARGUMENTS` is empty, ask the user for the plan path. Do not proceed without it.
 
 ## STEP 0 - Read inputs and extract run-name (do this FIRST)
 

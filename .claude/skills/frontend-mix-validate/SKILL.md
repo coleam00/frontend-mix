@@ -10,7 +10,7 @@ You are the **validation** step of a manual mixed-provider build. Sonnet handles
 
 ## Arguments
 
-`$ARGUMENTS` is a single absolute path to the integration summary produced by `frontend-mix-integrate`, e.g.:
+The path to the integration summary (produced by `frontend-mix-integrate`) comes in via `$ARGUMENTS`. Example value of `$ARGUMENTS`:
 
 ```
 .claude/artifacts/acme-saas-landing-integration-summary.md
@@ -18,7 +18,7 @@ You are the **validation** step of a manual mixed-provider build. Sonnet handles
 
 The filename prefix (everything before `-integration-summary.md`) is the **run-name**. You'll use it to name your output file.
 
-If `$ARGUMENTS` is empty or not a path, ask the user for the integration summary path. Infer the stack from the repo as a fallback (package manager via lockfile, framework via `package.json`).
+If `$ARGUMENTS` is empty, ask the user for the integration summary path. Infer the stack from the repo as a fallback (package manager via lockfile, framework via `package.json`).
 
 ## STEP 0 - Read input and extract run-name (do this FIRST)
 

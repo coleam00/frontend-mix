@@ -10,18 +10,18 @@ You are the **integration** step of a manual mixed-provider build. Opus does the
 
 ## Arguments
 
-`$ARGUMENTS` contains TWO absolute paths, space-separated:
+Two paths come in via `$ARGUMENTS`, space-separated:
 
-1. Path to `<run-name>-plan.md` (from `frontend-mix-plan`)
-2. Path to `<run-name>-ui-summary.md` (from `frontend-mix-design`)
+1. The path to `<run-name>-plan.md` (from `frontend-mix-plan`)
+2. The path to `<run-name>-ui-summary.md` (from `frontend-mix-design`)
 
-Example:
+Example value of `$ARGUMENTS`:
 
 ```
 .claude/artifacts/acme-saas-landing-plan.md .claude/artifacts/acme-saas-landing-ui-summary.md
 ```
 
-If either path is missing, ask the user for it. Do not work from context summaries - the artifacts are the files on disk.
+If either is missing, ask the user for it. Do not work from context summaries; the artifacts are the files on disk.
 
 ## STEP 0 - Read inputs and extract run-name (do this FIRST)
 
