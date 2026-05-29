@@ -1,0 +1,515 @@
+name: archon-build-frontend-mixed
+description: |
+  Build a full-stack web app by routing each phase to the model that earns its
+  tokens at that step.
+
+  - Opus plans the architecture, page copy, integration scope, and deployment
+    target.
+  - Gemini 3.5 Flash (via Pi → OpenRouter) designs the UI from the plan's copy.
+  - Opus integrates everything the plan calls for (auth, APIs, third parties).
+  - Sonnet validates the build. If validation can't be made clean in two
+    attempts, an Opus fix-validation node reads the failure list and addresses
+    each issue.
+  - Opus deploys per whatever target the plan picked.
+
+  The workflow is provider-routing, not vendor-specific. The `integrate` and
+  `deploy` nodes have the `clerk-cli` skill loaded as a *capability* so they
+  CAN drive Clerk if the plan calls for it - but they only use it when the
+  plan says so. Swap in any other tool the plan asks for (Supabase, Stripe,
+  Vercel, Fly, Railway, etc.) and these nodes still work.
+
+  ## Artifact passing convention (READ THIS BEFORE EDITING)
+
+  Each node writes its primary output to a markdown file under `$ARTIFACTS_DIR/`
+  (context.md → plan.md → ui-summary.md → integration-summary.md →
+  validation-summary.md OR validation-issues.md → deploy-summary.md).
+
+  Downstream nodes MUST open those files with the Read tool. The `$NODE.output`
+  variable is only the closing text message of the previous node - it is NOT
+  the artifact. Every prompt below explicitly tells the node to Read the file
+  from $ARTIFACTS_DIR. Do not regress this.
+
+  For the Saturday 2026-05-30 stream, the chosen target is an Archon
+  Benchmarking dashboard and the chosen integrations happen to be Clerk auth
+  + a Next.js API + Vercel deploy. None of that is hard-coded here.
+
+# Workflow defaults - overridden per node where it matters.
+provider: claude
+model: sonnet
+
+nodes:
+  # ───────────────────────────────────────────────────────────────
+  # PHASE 1: EXPLORE
+  # Cheap context gathering. Sonnet is plenty for "what's in here?"
+  # ───────────────────────────────────────────────────────────────
+  - id: explore
+    context: fresh
+    allowed_tools: [Read, Glob, Grep, Bash]
+    prompt: |
+      You are gathering context for a brand-new full-stack web application build.
+
+      User request: $ARGUMENTS
+
+      ## Investigate
+
+      1. What kind of repo is this (empty, Next.js scaffold, monorepo)?
+      2. What tooling is in place (package manager, ESLint, Tailwind, shadcn)?
+      3. Are there design tokens, brand assets, or a logo already?
+      4. Is there a `.env` or `.env.local`? What variables are defined?
+      5. If the user request mentions a spec file path, Read it and summarize
+         what kind of app it describes (one paragraph max - the plan node will
+         open the spec itself).
+
+      ## Output
+
+      Write a one-page context dump to `$ARTIFACTS_DIR/context.md`. Concrete:
+      file paths, versions, what's present, what's missing. The plan node feeds
+      directly off this file.
+
+      ## Final turn
+
+      End with a short text message stating: "Wrote $ARTIFACTS_DIR/context.md
+      (N bytes). Repo summary: <one sentence>." Never end silently.
+
+  # ───────────────────────────────────────────────────────────────
+  # PHASE 2: PLAN  (Opus - judgment-heavy)
+  # Architecture + page copy + explicit UI vs Integration split + deploy target.
+  # ───────────────────────────────────────────────────────────────
+  - id: plan
+    provider: claude
+    model: opus
+    depends_on: [explore]
+    context: fresh
+    prompt: |
+      You are planning a full-stack web application. Reasoning-heavy work - go
+      slow and get the structure right.
+
+      ## STEP 0 - Read the prior artifacts (REQUIRED, do this FIRST)
+
+      Before anything else, use the Read tool to open these files in order:
+
+      1. `$ARTIFACTS_DIR/context.md` - the repo context the explore node wrote.
+      2. If the user request includes a spec file path, Read that spec file
+         end-to-end. Quote its key requirements back to yourself.
+
+      Do not skip these reads. The previous node's closing chat message is NOT
+      a substitute - you need the full contents on disk.
+
+      ## User request
+      $ARGUMENTS
+
+      ## Critical: produce a plan with THREE explicit sections
+
+      ### SECTION A - UI Scope (for the Gemini node)
+
+      For every page in the app: route, purpose, what it contains.
+      For every component: name, what it shows, where it appears.
+
+      **Write the actual user-facing copy.** Every headline, sub-headline, button
+      label, card title, empty-state message, error message. Gemini will build
+      the UI directly from this text; if the copy is vague, the UI is vague.
+
+      ### SECTION B - Integration Scope (for the Opus integration node)
+
+      List every non-UI concern. Be specific about which tools/services and why.
+      Examples (pick what this app actually needs - these are not mandatory):
+      - Authentication: which provider, which flows (sign-in, sign-up, protected
+        routes, org switcher), and the exact CLI / SDK calls
+      - Backend API: every endpoint - method, path, input, output, auth check
+      - External APIs / SDKs and where they're called
+      - Data model: tables, fields, indexes; which database
+      - Background jobs / async workflows, if any
+
+      ### SECTION C - Deployment Plan (for the Opus deploy node)
+
+      State the deployment target explicitly. Examples (pick one based on what
+      fits this app - do NOT pre-commit to anything):
+      - "Local only - no deployment needed this run"
+      - "Vercel via `vercel deploy --prod`"
+      - "Fly.io via `flyctl deploy`"
+      - "Railway via `railway up`"
+      - "Auth provider's deploy command (e.g. `clerk deploy` to take a Clerk
+        instance from dev to prod)"
+      - "Custom - describe the exact commands"
+
+      Include any pre-deploy steps (env var promotion, migrations, etc.) and
+      what counts as deploy success.
+
+      ## Output
+
+      Write `$ARTIFACTS_DIR/plan.md` with the three sections clearly labeled
+      using `## SECTION A - UI Scope`, `## SECTION B - Integration Scope`,
+      `## SECTION C - Deployment Plan` headers. Do NOT mix them. The downstream
+      nodes grep these headers to extract their section.
+
+      ## Final turn
+
+      End with a short text message stating: "Wrote $ARTIFACTS_DIR/plan.md
+      (N bytes). Sections A/B/C complete." Never end silently after a tool call.
+
+  # ───────────────────────────────────────────────────────────────
+  # PHASE 3: BUILD UI  (Gemini 3.5 Flash via Pi → OpenRouter)
+  # Beautiful frontends are Gemini's strong suit. Pi is the harness;
+  # OpenRouter is the route. Cole's OPENROUTER_API_KEY lives in Pi's auth.
+  # ───────────────────────────────────────────────────────────────
+  - id: build-ui
+    provider: pi
+    # Requires: (1) patched Archon source (resource-loader.ts passes
+    # agentDir: getAgentDir()), (2) pi-ai bumped to ^0.73.1, (3)
+    # ~/.pi/agent/models.json registering google/gemini-3.5-flash as a
+    # custom OpenRouter model, (4) patched direnv extension (race fix).
+    # See setup-notes.md in the bundle. Pi extensions stay ENABLED.
+    # Run via `bun C:/Users/colem/Archon/packages/cli/src/cli.ts workflow run ...`
+    # NOT the compiled `archon` binary (which still has stale pi-ai 0.67.5).
+    # Pi → OpenRouter → google/gemini-3.5-flash. OpenRouter account verified
+    # paid (is_free_tier: false, unlimited rate, $11+ remaining credits) and
+    # the model is fully available at $1.50/$9 per M. Earlier 429s in v4/v5
+    # were transient and resolved.
+    model: openrouter/google/gemini-3.5-flash
+    depends_on: [plan]
+    context: fresh
+    prompt: |
+      You are building the frontend using Gemini 3.5 Flash. **Only build the UI
+      surface - auth, API calls, third-party SDKs, and deployment belong to the
+      later nodes. Do not touch them.**
+
+      ## STEP 0 - Read the plan (REQUIRED, do this FIRST)
+
+      Use the Read tool to open `$ARTIFACTS_DIR/plan.md` end-to-end. Then
+      extract everything under the `## SECTION A - UI Scope` heading. Ignore
+      SECTION B and SECTION C entirely. Treat SECTION A as your complete spec.
+
+      Do NOT proceed until you have actually called Read on plan.md. The prior
+      node's closing chat message is not the plan; the plan is the file.
+
+      ## CRITICAL - how to end every turn
+
+      The Archon workflow requires your final message to contain text content.
+      A turn that ends with only a tool call (and no closing text) breaks the
+      pipeline. **Always finish with a short written summary** - even if a
+      tool call failed, even if the task isn't fully done, even if you only
+      created one file. Never end silently after a tool call.
+
+      If a bash command fails: **do not abort the whole task.** Acknowledge
+      the failure in text, try a workaround (e.g. use Write/Edit instead of
+      bash to scaffold files; use Read/Glob to inspect the repo without
+      shelling out), and keep going. Your job is the UI surface; bash failures
+      on auxiliary setup commands should not block file scaffolding.
+
+      ## How to build
+
+      1. Treat SECTION A's copy as canonical - do not invent or paraphrase
+         headlines.
+      2. Scaffold pages and components in the framework detected by `explore`
+         (Next.js App Router by default). Use Write and Edit, not bash, for
+         file creation - they're more reliable.
+      3. Use Tailwind + shadcn/ui. Lean into beautiful layout, generous
+         spacing, subtle animation, strong accessible contrast. Mobile-first.
+         If shadcn primitives aren't installed yet, write each primitive's
+         source directly (the shadcn registry source is straightforward TSX)
+         rather than depending on `npx shadcn add`.
+      4. **Leave seams for the integration node.** Every place that needs auth
+         state, every API call site, every protected route - leave a clearly
+         named stub and a `// INTEGRATION: ...` comment describing what the
+         integration node should fill in.
+      5. Do NOT install auth SDKs, call third-party APIs, or create server
+         routes - those are the integration node's job.
+
+      ## Output
+
+      Write `$ARTIFACTS_DIR/ui-summary.md` listing every file created and every
+      `// INTEGRATION:` stub left behind (file + line + what's expected).
+
+      ## Final turn
+
+      After writing ui-summary.md, your closing message MUST be a 2-3 sentence
+      text summary of what you accomplished and the absolute path to the
+      ui-summary.md file. A silent end-of-turn after the Write of ui-summary.md
+      will cause the integration node to skip and the workflow to fail.
+
+  # ───────────────────────────────────────────────────────────────
+  # PHASE 4: INTEGRATE  (Opus - wires whatever SECTION B calls for)
+  # Skill `clerk-cli` is preloaded as a *capability* - used only if the plan
+  # picked Clerk. Same node would handle Supabase, NextAuth, Stripe, etc.
+  # ───────────────────────────────────────────────────────────────
+  - id: integrate
+    provider: claude
+    model: opus
+    depends_on: [build-ui]
+    context: fresh
+    skills:
+      - clerk-cli       # capability - engage only if SECTION B selected Clerk
+    prompt: |
+      You are wiring backend + integrations into the UI scaffold the previous
+      node built. **Read SECTION B of the plan. Implement exactly what it
+      specifies - nothing more, nothing less.**
+
+      ## STEP 0 - Read the prior artifacts (REQUIRED, do this FIRST)
+
+      Use the Read tool to open these two files end-to-end before doing
+      anything else:
+
+      1. `$ARTIFACTS_DIR/plan.md` - focus on the `## SECTION B - Integration
+         Scope` heading. Ignore SECTION A and SECTION C.
+      2. `$ARTIFACTS_DIR/ui-summary.md` - every `// INTEGRATION:` stub the UI
+         node left is one of your work items.
+
+      Do NOT proceed until you have actually called Read on both files. The
+      prior nodes' closing chat messages are NOT the artifacts.
+
+      The `clerk-cli` skill is loaded so you CAN drive the `clerk` binary
+      directly if SECTION B picked Clerk for auth. If SECTION B picked a
+      different auth provider, ignore the skill and use whatever the plan
+      says (Supabase, NextAuth, Auth.js, etc.).
+
+      ## Your job
+
+      1. **Auth** - implement whatever auth provider SECTION B chose. If Clerk,
+         use the `clerk` binary via the loaded skill (`clerk init`, `clerk link`,
+         `clerk env pull`, `clerk config patch --dry-run` then apply,
+         `clerk doctor --json` at the end).
+      2. **Wire up every `// INTEGRATION:` stub** the UI node left.
+      3. **Build the backend API** per SECTION B. Every protected handler
+         authenticates against the chosen auth provider's session.
+      4. **External services** - wire up any SDKs / APIs SECTION B listed
+         (Stripe, Supabase, OpenAI, etc.).
+      5. Run whatever health checks the chosen stack provides (e.g.
+         `clerk doctor --json` for Clerk). Fix every `fail` before signaling
+         complete.
+
+      ## Output
+
+      `$ARTIFACTS_DIR/integration-summary.md` - every file touched and every
+      external command run (CLI invocations, migrations, etc.) with output.
+
+      ## Final turn
+
+      End with: "Wrote $ARTIFACTS_DIR/integration-summary.md. Auth provider:
+      <name>. Endpoints wired: <count>. Stubs resolved: <N> of <M>." Never end
+      silently.
+
+  # ───────────────────────────────────────────────────────────────
+  # PHASE 5: VALIDATE  (Sonnet - grind work, 2-attempt cap)
+  # Writes EITHER validation-summary.md (clean) OR validation-issues.md
+  # (failures). The next node (fix-validation) reads whichever exists.
+  # ───────────────────────────────────────────────────────────────
+  - id: validate
+    depends_on: [integrate]
+    context: fresh
+    prompt: |
+      Run the full validation suite on the new app. Two attempts max per
+      command - do NOT loop indefinitely.
+
+      ## STEP 0 - Read the integration summary (REQUIRED)
+
+      Use the Read tool to open `$ARTIFACTS_DIR/integration-summary.md`. This
+      tells you which package manager + framework + commands the integrate
+      node settled on. Match those commands; do not invent new ones.
+
+      ## Validation steps (each capped at 2 attempts)
+
+      1. Install: `bun install` (or npm/pnpm based on the lockfile present).
+      2. Type check (whatever the project uses - `tsc --noEmit`, `bun run
+         typecheck`, etc.).
+      3. Lint (`bun run lint`, `eslint .`, etc.).
+      4. Build: `bun run build` (or framework equivalent).
+      5. Tests if they exist (`bun test`, `bun run test`).
+
+      For each step:
+      - Attempt 1: run the command. If it passes, move on.
+      - Attempt 2: if it failed, try one targeted fix (read the error, edit
+        the offending file, re-run). If it still fails, STOP retrying that
+        step and record the failure.
+
+      Do not paper over real bugs. Do not delete tests to make them pass. Do
+      not weaken types to silence type errors. If you find yourself wanting
+      to do any of that, record the failure instead.
+
+      ## Output - exactly ONE of these two files
+
+      **Case A - All steps passed cleanly:**
+
+      Write `$ARTIFACTS_DIR/validation-summary.md` containing:
+      - Each command run + its exit code
+      - One-line confirmation: "All checks passed."
+
+      **Case B - One or more steps failed after 2 attempts:**
+
+      Write `$ARTIFACTS_DIR/validation-issues.md` containing, for each failure:
+      - Step name (e.g. "type check")
+      - Exact command that failed
+      - Truncated error output (last 30 lines)
+      - File(s) most likely responsible (your best guess)
+      - One-sentence hypothesis for the root cause
+
+      Then STOP. The fix-validation node will read this file and address each
+      failure with a fresh-context Opus session.
+
+      ## Final turn
+
+      End with: "Wrote $ARTIFACTS_DIR/validation-summary.md (clean)" OR
+      "Wrote $ARTIFACTS_DIR/validation-issues.md (N failures recorded)".
+      Never end silently.
+
+  # ───────────────────────────────────────────────────────────────
+  # PHASE 5b: FIX VALIDATION ISSUES  (Opus - addresses what validate flagged)
+  # No-ops cleanly if validation-issues.md doesn't exist (clean validate run).
+  # Otherwise: reads the failure list, addresses each, re-runs validation,
+  # writes resolution-summary.md.
+  # ───────────────────────────────────────────────────────────────
+  - id: fix-validation
+    provider: claude
+    model: opus
+    depends_on: [validate]
+    context: fresh
+    prompt: |
+      You are the escalation step that addresses validation failures the
+      previous node couldn't fix in two attempts.
+
+      ## STEP 0 - Check whether there are failures to address (REQUIRED)
+
+      Use the Read tool to check if `$ARTIFACTS_DIR/validation-issues.md`
+      exists. If it does NOT exist (the validate node produced a clean
+      validation-summary.md instead), then:
+
+      1. Write `$ARTIFACTS_DIR/resolution-summary.md` containing the single
+         line: "No validation issues to address. validation-summary.md was
+         clean."
+      2. End your turn with: "No-op: validation was clean. Wrote
+         resolution-summary.md."
+
+      If `validation-issues.md` DOES exist, continue with steps 1-4 below.
+
+      ## STEP 1 - Read both validation artifacts and the integration summary
+
+      Use Read on:
+      - `$ARTIFACTS_DIR/validation-issues.md` (your work list)
+      - `$ARTIFACTS_DIR/integration-summary.md` (what was wired up)
+      - `$ARTIFACTS_DIR/plan.md` SECTION B (what was supposed to be wired up)
+
+      ## STEP 2 - Address each failure with judgment
+
+      For each failure in validation-issues.md:
+
+      1. Read the offending file(s) end-to-end. Do not assume - verify.
+      2. Identify the actual root cause. If the type error says "X has no
+         property Y", the fix is either to add Y to X's type, or to stop
+         accessing Y, depending on which is correct per the plan.
+      3. Apply a real fix. Edit the source, not the validation config.
+      4. Re-run the specific failing command to confirm the fix.
+
+      Banned shortcuts (these are bugs, not solutions):
+      - Adding `// @ts-ignore`, `// eslint-disable`, or `any` to silence checks
+      - Deleting failing tests
+      - Removing strict mode or loosening tsconfig
+      - Skipping validation steps you can't fix
+
+      If a failure genuinely cannot be fixed without changing the plan (e.g.
+      a missing third-party API key, a Clerk feature requiring a paid plan),
+      record it as an OPEN ISSUE in resolution-summary.md with the exact
+      blocker - do not silently skip.
+
+      ## STEP 3 - Re-run the full validation suite once
+
+      After all individual fixes, re-run install → typecheck → lint → build →
+      tests once end-to-end. Record the final state.
+
+      ## STEP 4 - Write the resolution summary
+
+      Write `$ARTIFACTS_DIR/resolution-summary.md` containing:
+      - Each original failure
+      - The fix applied (file:line + what changed) OR "OPEN ISSUE: <blocker>"
+      - The final state of `bun run build` and tests
+      - "READY TO DEPLOY" if everything is now clean, else "NOT READY:
+        <reason>"
+
+      ## Final turn
+
+      End with: "Wrote $ARTIFACTS_DIR/resolution-summary.md. Status:
+      <READY TO DEPLOY | NOT READY: reason>". Never end silently.
+
+  # ───────────────────────────────────────────────────────────────
+  # PHASE 6: DEPLOY  (Opus - runs whatever SECTION C specifies)
+  # Reads resolution-summary.md to confirm validation is clean before
+  # deploying. Generic deployment node - plan picks the actual target.
+  # ───────────────────────────────────────────────────────────────
+  - id: deploy
+    provider: claude
+    model: opus
+    depends_on: [fix-validation]
+    context: fresh
+    skills:
+      - clerk-cli       # capability - engage only if SECTION C uses `clerk deploy`
+    prompt: |
+      You are deploying the application. **Read SECTION C of the plan and do
+      exactly what it says - nothing more, nothing less.**
+
+      ## STEP 0 - Read the prior artifacts (REQUIRED, do this FIRST)
+
+      Use the Read tool to open these files end-to-end:
+
+      1. `$ARTIFACTS_DIR/resolution-summary.md` - check the final status line.
+         If it says "NOT READY: <reason>", do NOT deploy. Instead, write a
+         deploy-summary.md noting the deploy was skipped because validation
+         was not clean, quote the blocker, and end your turn.
+      2. `$ARTIFACTS_DIR/plan.md` - focus on `## SECTION C - Deployment Plan`.
+         Ignore SECTION A and SECTION B.
+      3. `$ARTIFACTS_DIR/integration-summary.md` - the wired stack you're
+         about to deploy.
+
+      Do NOT proceed until you have actually called Read on all three.
+
+      ## Possible deployment targets the plan might pick (not exhaustive)
+
+      - Local only - no deploy. In this case: write a summary noting why no
+        deploy was needed and stop.
+      - A platform CLI (`vercel deploy --prod`, `flyctl deploy`, `railway up`,
+        `wrangler deploy`, etc.) - invoke the CLI.
+      - An auth provider's deploy step (`clerk deploy` is loaded as a skill
+        capability - use it if SECTION C asked for it).
+      - Custom commands SECTION C describes.
+
+      ## Your job
+
+      1. Read SECTION C. Identify the deploy target and pre-deploy steps.
+      2. Run pre-deploy steps in order (env promotion, migrations, etc.).
+      3. **Dry-run first wherever the tool supports it** (`vercel deploy
+         --prebuilt`, `clerk deploy --dry-run`, `flyctl deploy --dry-run`).
+         Show the diff or planned changes.
+      4. If the dry-run looks correct, run the real deploy.
+      5. Run the post-deploy verification SECTION C describes (curl the
+         deployed URL, check a health endpoint, etc.).
+
+      ## Output
+
+      Write `$ARTIFACTS_DIR/deploy-summary.md` with: target, commands run,
+      dry-run diff, deployed URL (if any), and verification results. If the
+      plan said "local only", just write that to the file and exit cleanly.
+
+      ## Final turn
+
+      End with: "Wrote $ARTIFACTS_DIR/deploy-summary.md. Deploy target:
+      <target>. Status: <deployed | skipped | failed>." Never end silently.
+
+  # ───────────────────────────────────────────────────────────────
+  # PHASE 7: FINALIZE
+  # ───────────────────────────────────────────────────────────────
+  - id: finalize
+    depends_on: [deploy]
+    bash: |
+      set -euo pipefail
+      git add -A
+      git commit -m "feat: ship $ARGUMENTS via mixed-provider workflow" || echo "nothing to commit"
+      echo "---"
+      echo "Context:     $ARTIFACTS_DIR/context.md"
+      echo "Plan:        $ARTIFACTS_DIR/plan.md"
+      echo "UI:          $ARTIFACTS_DIR/ui-summary.md"
+      echo "Integration: $ARTIFACTS_DIR/integration-summary.md"
+      if [ -f "$ARTIFACTS_DIR/validation-issues.md" ]; then
+        echo "Validation:  $ARTIFACTS_DIR/validation-issues.md (issues found)"
+        echo "Resolution:  $ARTIFACTS_DIR/resolution-summary.md"
+      else
+        echo "Validation:  $ARTIFACTS_DIR/validation-summary.md (clean)"
+      fi
+      echo "Deploy:      $ARTIFACTS_DIR/deploy-summary.md"
+    timeout: 30000
