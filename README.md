@@ -38,6 +38,18 @@ Claude Code makes skills user-invocable as slash commands by default. Pi exposes
 
 Each step is a slash command in the right tool. The output of each step is a markdown file in `.claude/artifacts/` with the run-name as the filename prefix. The next step just needs that path.
 
+### Quick chain
+
+1. `/frontend-mix-plan <spec.md path or "description">` (Claude Code, Opus)
+2. `/skill:frontend-mix-design <plan path>` (Pi, Gemini 3.5 Flash)
+3. `/frontend-mix-integrate <plan path> <ui-summary path>` (Claude Code, Opus)
+4. `/frontend-mix-validate <integration-summary path>` (Claude Code, Sonnet)
+5. `/frontend-mix-fix-validation <validation-issues path> <plan path>` (Claude Code, Opus, only if step 4 flagged failures)
+6. `/frontend-mix-deploy <plan path> <validation-summary or resolution-summary path>` (Claude Code, Opus)
+
+<details>
+<summary><b>Detailed walkthrough</b> (click to expand)</summary>
+
 ### 1. Plan - Claude Code with Opus 4.8
 
 The plan step accepts **either** an absolute path to a spec markdown **or** a free-form description of what you want to build. Both work; whichever is more convenient.
@@ -51,7 +63,7 @@ With a spec file:
 With a plain-text description:
 
 ```
-/frontend-mix-plan a landing page + sign-in + dashboard for an AI image-gen SaaS, Clerk for auth
+/frontend-mix-plan "A landing page + sign-in + dashboard for an AI image-gen SaaS, Clerk for auth"
 ```
 
 The skill picks a run-name slug from your input (e.g. `acme-saas-landing`) and writes:
@@ -145,6 +157,8 @@ Output:
 ```
 
 App is live.
+
+</details>
 
 ## How to run the chain automatically (via Archon)
 
