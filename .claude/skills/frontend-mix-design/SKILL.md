@@ -1,30 +1,20 @@
 ---
 name: frontend-mix-design
 description: Design and scaffold a beautiful frontend from SECTION A of a planning document. Run this skill in a Pi session driving Gemini 3.5 Flash, because Gemini builds the most beautiful frontends right now. The skill only builds the UI surface - auth, API calls, and SDK integrations belong to the next session. Use when the user has a plan.md from the frontend-mix-plan skill and is ready to build the UI.
-argument-hint: <path-to-run-name-plan.md>
+argument-hint: <plan.md path>
 ---
 
 # Frontend-Mix · Design
 
 You are the **UI design** step of a manual mixed-provider build. This step is best handled by Gemini 3.5 Flash. **Only build the UI surface - auth, API calls, third-party SDKs, and deployment belong to later sessions. Do not touch them.**
 
-## Arguments
+## What to do
 
-The path to the plan markdown (produced by `frontend-mix-plan`) comes in via `$ARGUMENTS`. Example value of `$ARGUMENTS`:
+1. Use the Read tool to open `$ARGUMENTS` end-to-end. (In Pi, where args are appended rather than substituted, treat the last user-supplied path as the plan path.) Extract everything under the `## SECTION A - UI Scope` header. Ignore SECTION B and SECTION C - they are not your scope.
 
-```
-.claude/artifacts/acme-saas-landing-plan.md
-```
+2. The filename in `$ARGUMENTS` carries your run-name. Strip the directory and the `-plan.md` suffix. Example: `.claude/artifacts/acme-saas-landing-plan.md` → run-name = `acme-saas-landing`. You'll use it to name your output file so the next skill in the chain can find it.
 
-The filename prefix (everything before `-plan.md`) is the **run-name**. You'll use it to name your output file so the next skill in the chain can find it.
-
-If `$ARGUMENTS` is empty, ask the user for the plan path. Do not proceed without it.
-
-## STEP 0 - Read inputs and extract run-name (do this FIRST)
-
-1. Use the Read tool to open the path in `$ARGUMENTS` end-to-end.
-2. Extract everything under the `## SECTION A - UI Scope` header. Ignore SECTION B and SECTION C - they are not your scope.
-3. **Extract the run-name** from the input filename: strip the directory, strip the `-plan.md` suffix. Example: `.claude/artifacts/acme-saas-landing-plan.md` → run-name = `acme-saas-landing`.
+3. If `$ARGUMENTS` is empty or the path doesn't resolve, ask the user for the plan path. Do not proceed without it.
 
 ## How to build
 
@@ -46,16 +36,12 @@ The file lists:
 
 ## After scaffolding
 
-Tell the user the absolute path to `<run-name>-ui-summary.md` and the next manual step:
+Tell the user the absolute path to `<run-name>-ui-summary.md` and the next step:
 
 ```
 Wrote .claude/artifacts/<run-name>-ui-summary.md
 
-Next: open Claude Code with Opus and run the frontend-mix-integrate skill.
-Pass BOTH paths - plan first, ui-summary second.
-
-claude --skill ~/.claude/skills/frontend-mix-integrate \
-       "<absolute-path>/.claude/artifacts/<run-name>-plan.md <absolute-path>/.claude/artifacts/<run-name>-ui-summary.md"
+Next: back in Claude Code with Opus, invoke /frontend-mix-integrate with BOTH the plan path AND the ui-summary path.
 ```
 
 ## Design tips

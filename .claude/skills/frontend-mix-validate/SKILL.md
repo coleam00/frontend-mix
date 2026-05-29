@@ -1,29 +1,20 @@
 ---
 name: frontend-mix-validate
 description: Run the full validation suite (install, type-check, lint, build, tests) on a freshly integrated app and fix anything broken. Run this skill in a Claude Code session driving Sonnet - validation is grind work, Sonnet is the right tool. Two-attempt cap per step; failures are recorded for the fix-validation escalation step, not papered over. Use after the frontend-mix-integrate session finishes.
-argument-hint: <path-to-run-name-integration-summary.md>
+argument-hint: <integration-summary.md path>
 ---
 
 # Frontend-Mix · Validate
 
 You are the **validation** step of a manual mixed-provider build. Sonnet handles this - it's grind work, not judgment. **Two attempts per check, then record the failure. Never paper over real bugs.**
 
-## Arguments
+## What to do
 
-The path to the integration summary (produced by `frontend-mix-integrate`) comes in via `$ARGUMENTS`. Example value of `$ARGUMENTS`:
+1. Use the Read tool to open `$ARGUMENTS` end-to-end. Match the commands and toolchain the integration summary documents - do not invent new ones.
 
-```
-.claude/artifacts/acme-saas-landing-integration-summary.md
-```
+2. The filename in `$ARGUMENTS` carries your run-name. Strip the directory and the `-integration-summary.md` suffix. You'll use it to name your output file.
 
-The filename prefix (everything before `-integration-summary.md`) is the **run-name**. You'll use it to name your output file.
-
-If `$ARGUMENTS` is empty, ask the user for the integration summary path. Infer the stack from the repo as a fallback (package manager via lockfile, framework via `package.json`).
-
-## STEP 0 - Read input and extract run-name (do this FIRST)
-
-1. Use the Read tool to open the path in `$ARGUMENTS` end-to-end. Match the commands and toolchain it documents - do not invent new ones.
-2. **Extract the run-name** from the input filename (strip directory, strip `-integration-summary.md`). You'll use it to name your output file.
+3. If `$ARGUMENTS` is empty, ask the user for the integration summary path. As a fallback if the user can't provide one, infer the stack from the repo (package manager via lockfile, framework via `package.json`).
 
 ## Steps (each capped at 2 attempts)
 
@@ -71,12 +62,8 @@ Tell the user the absolute path to whichever file you wrote, and the next step:
 
 ```
 If you wrote <run-name>-validation-summary.md (clean):
-  Next: deploy (Opus).
-  claude --skill ~/.claude/skills/frontend-mix-deploy \
-         "<absolute-path>/.claude/artifacts/<run-name>-plan.md <absolute-path>/.claude/artifacts/<run-name>-validation-summary.md"
+  Next: invoke /frontend-mix-deploy with the plan path and the validation-summary path.
 
 If you wrote <run-name>-validation-issues.md (failures recorded):
-  Next: fix-validation (Opus) to address the failures.
-  claude --skill ~/.claude/skills/frontend-mix-fix-validation \
-         "<absolute-path>/.claude/artifacts/<run-name>-validation-issues.md <absolute-path>/.claude/artifacts/<run-name>-plan.md"
+  Next: switch back to Opus and invoke /frontend-mix-fix-validation with the validation-issues path and the plan path.
 ```

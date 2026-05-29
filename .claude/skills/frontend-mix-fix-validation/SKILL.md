@@ -1,38 +1,28 @@
 ---
 name: frontend-mix-fix-validation
 description: Address validation failures recorded by the frontend-mix-validate session. Run this skill in a Claude Code session driving Opus - failures that survived two Sonnet repair attempts need real judgment, not more grinding. Reads validation-issues.md, fixes each failure at the source, re-runs the validation suite, writes resolution-summary.md. Use when frontend-mix-validate wrote validation-issues.md instead of validation-summary.md.
-argument-hint: <path-to-run-name-validation-issues.md> <path-to-run-name-plan.md>
+argument-hint: <validation-issues.md path> <plan.md path>
 ---
 
 # Frontend-Mix · Fix Validation
 
 You are the **escalation** step for validation failures the prior Sonnet session couldn't fix in two attempts. Opus reasoning is what's needed here.
 
-## Arguments
+## What to do
 
-Two paths come in via `$ARGUMENTS`, space-separated:
+1. Read `$1` (the validation-issues markdown - your work list) end-to-end with the Read tool.
 
-1. The path to `<run-name>-validation-issues.md` (your work list)
-2. The path to `<run-name>-plan.md` (for SECTION B context: what was supposed to be wired up)
+2. Read `$2` (the plan markdown) and extract everything under `## SECTION B - Integration Scope`. This is what was supposed to be wired up.
 
-Example value of `$ARGUMENTS`:
+3. The filename in `$1` carries your run-name. Strip the directory and the `-validation-issues.md` suffix. You'll use it to name your output file.
 
-```
-.claude/artifacts/acme-saas-landing-validation-issues.md .claude/artifacts/acme-saas-landing-plan.md
-```
+4. For each failure listed in the issues file, Read the source file(s) it blames before forming a fix. Do not assume - verify.
 
-If either is missing, ask the user for it. Do not work from memory.
-
-## STEP 0 - Read inputs and extract run-name (do this FIRST)
-
-1. Use the Read tool to open `validation-issues.md` end-to-end. This is your work list.
-2. Use the Read tool to open `plan.md` and extract `## SECTION B - Integration Scope`.
-3. **Extract the run-name** from the first input filename (strip directory, strip `-validation-issues.md`). You'll use it to name your output file.
-4. For each failure listed in validation-issues.md, Read the file(s) it blames. Do not assume - verify.
+5. If `$1` or `$2` is empty or doesn't resolve, ask the user for the missing path. Do not work from memory.
 
 ## Address each failure
 
-For every failure in validation-issues.md:
+For every failure in the issues file:
 
 1. **Diagnose at the source.** Read the actual offending file end-to-end. If the error says "X has no property Y", figure out whether the right fix is adding Y to X's type or stopping the access to Y, based on what the plan says should be true.
 2. **Apply a real fix.** Edit the source code, not the validation config.
@@ -59,20 +49,18 @@ After all individual fixes, run install → typecheck → lint → build → tes
 Write to `.claude/artifacts/<run-name>-resolution-summary.md`. Create the `.claude/artifacts/` directory if it doesn't exist.
 
 Contents:
-- Each original failure from validation-issues.md
+- Each original failure from the issues file
 - The fix applied (file:line + what changed) OR "OPEN ISSUE: <blocker>"
 - Final state of `bun run build` and tests
 - A status line at the end: **"READY TO DEPLOY"** if everything is now clean, else **"NOT READY: <reason>"**
 
 ## After fixing
 
-Tell the user the absolute path to `<run-name>-resolution-summary.md` and the next manual step:
+Tell the user the absolute path to `<run-name>-resolution-summary.md` and the next step:
 
 ```
 If status is READY TO DEPLOY:
-  Next: deploy (Opus).
-  claude --skill ~/.claude/skills/frontend-mix-deploy \
-         "<absolute-path>/.claude/artifacts/<run-name>-plan.md <absolute-path>/.claude/artifacts/<run-name>-resolution-summary.md"
+  Next: invoke /frontend-mix-deploy with the plan path and the resolution-summary path.
 
 If status is NOT READY:
   Surface the open issues to the user and stop. Do not deploy a broken build.

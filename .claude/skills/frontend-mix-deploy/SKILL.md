@@ -1,35 +1,24 @@
 ---
 name: frontend-mix-deploy
 description: Deploy a validated build per SECTION C of a planning document. Run this skill in a Claude Code session driving Opus - the deploy step is reasoning-light most of the time but needs judgment when the dry-run output looks off. Skill is generic: it does whatever SECTION C says (Vercel, Fly, Railway, clerk deploy, local-only). Refuses to deploy unless validation is confirmed clean.
-argument-hint: <path-to-run-name-plan.md> <path-to-run-name-validation-or-resolution.md>
+argument-hint: <plan.md path> <validation-summary.md OR resolution-summary.md path>
 ---
 
 # Frontend-Mix · Deploy
 
 You are the **deploy** step of a manual mixed-provider build.
 
-## Arguments
+## What to do
 
-Two paths come in via `$ARGUMENTS`, space-separated:
+1. Read `$1` (the plan markdown) with the Read tool. Extract everything under `## SECTION C - Deployment Plan`. Ignore SECTION A and SECTION B.
 
-1. The path to `<run-name>-plan.md` (for SECTION C)
-2. The path to EITHER `<run-name>-validation-summary.md` (clean run) OR `<run-name>-resolution-summary.md` (after fix-validation)
+2. Read `$2` (the validation status file) with the Read tool. It's either:
+   - `<run-name>-validation-summary.md` (clean run, came straight from validate) → proceed.
+   - `<run-name>-resolution-summary.md` (after fix-validation) → check the final status line. If it ends with "NOT READY: <reason>", **do not deploy.** Write a deploy-summary noting the blocker and exit cleanly.
 
-Example value of `$ARGUMENTS`:
+3. The filename in `$1` carries your run-name. Strip the directory and the `-plan.md` suffix. You'll use it to name your output file.
 
-```
-.claude/artifacts/acme-saas-landing-plan.md .claude/artifacts/acme-saas-landing-resolution-summary.md
-```
-
-If either is missing, ask the user. Do not deploy a build you cannot confirm is clean.
-
-## STEP 0 - Read inputs and extract run-name (do this FIRST)
-
-1. Use the Read tool to open the plan path. Extract everything under `## SECTION C - Deployment Plan`. Ignore SECTION A and SECTION B.
-2. Use the Read tool to open the validation/resolution path:
-   - If it's a `-resolution-summary.md` and ends with "NOT READY: <reason>", **do not deploy.** Write a deploy-summary noting the blocker and exit cleanly.
-   - If it's a `-validation-summary.md` or a `-resolution-summary.md` ending with "READY TO DEPLOY", proceed.
-3. **Extract the run-name** from the plan filename (strip directory, strip `-plan.md`). You'll use it to name your output file.
+4. If `$1` or `$2` is empty or doesn't resolve, ask the user for the missing path. Do not deploy a build you cannot confirm is clean.
 
 ## What SECTION C might say
 
