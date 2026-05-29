@@ -106,7 +106,7 @@ If validation flagged failures after two repair attempts:
 .claude/artifacts/acme-saas-landing-validation-issues.md
 ```
 
-### 5. Fix validation (Claude Code, Opus 4.8) — only if step 4 wrote `validation-issues.md`
+### 5. Fix validation (Claude Code, Opus 4.8) - only if step 4 wrote `validation-issues.md`
 
 Switch back to Opus. Pass the issues path AND the plan path:
 
