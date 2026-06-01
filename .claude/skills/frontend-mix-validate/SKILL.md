@@ -62,7 +62,7 @@ Tell the user the absolute path to whichever file you wrote, and the next step:
 
 ```
 If you wrote <run-name>-validation-summary.md (clean):
-  Next: invoke /frontend-mix-deploy with the plan path and the validation-summary path.
+  Next: invoke /frontend-mix-smoke with the integration-summary path and the validation-summary path.
 
 If you wrote <run-name>-validation-issues.md (failures recorded):
   Next: switch back to Opus and invoke /frontend-mix-fix-validation with the validation-issues path and the plan path.

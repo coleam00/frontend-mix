@@ -60,7 +60,7 @@ Tell the user the absolute path to `<run-name>-resolution-summary.md` and the ne
 
 ```
 If status is READY TO DEPLOY:
-  Next: invoke /frontend-mix-deploy with the plan path and the resolution-summary path.
+  Next: invoke /frontend-mix-smoke with the integration-summary path and the resolution-summary path.
 
 If status is NOT READY:
   Surface the open issues to the user and stop. Do not deploy a broken build.

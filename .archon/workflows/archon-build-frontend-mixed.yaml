@@ -10,6 +10,8 @@ description: |
   - Sonnet validates the build. If validation can't be made clean in two
     attempts, an Opus fix-validation node reads the failure list and addresses
     each issue.
+  - Sonnet smoke-tests the running app with agent-browser - catches runtime
+    bugs static checks miss (broken routes, dead buttons, unstyled renders).
   - Opus deploys per whatever target the plan picked.
 
   The workflow is provider-routing, not vendor-specific. The `integrate` and
@@ -22,7 +24,8 @@ description: |
 
   Each node writes its primary output to a markdown file under `$ARTIFACTS_DIR/`
   (context.md → plan.md → ui-summary.md → integration-summary.md →
-  validation-summary.md OR validation-issues.md → deploy-summary.md).
+  validation-summary.md OR validation-issues.md → resolution-summary.md →
+  smoke-summary.md → deploy-summary.md).
 
   Downstream nodes MUST open those files with the Read tool. The `$NODE.output`
   variable is only the closing text message of the previous node - it is NOT
@@ -429,14 +432,79 @@ nodes:
       <READY TO DEPLOY | NOT READY: reason>". Never end silently.
 
   # ───────────────────────────────────────────────────────────────
-  # PHASE 6: DEPLOY  (Opus - runs whatever SECTION C specifies)
+  # PHASE 6: SMOKE  (Sonnet + agent-browser - drives the RUNNING app)
+  # Catches the bugs static checks miss: broken routes, dead buttons,
+  # soft-404s, and pages that load 200 but render unstyled.
+  # ───────────────────────────────────────────────────────────────
+  - id: smoke
+    depends_on: [fix-validation]
+    context: fresh
+    skills:
+      - agent-browser   # capability - falls back to curl-only if unavailable
+    prompt: |
+      Runtime smoke-test the freshly validated app by driving the RUNNING app.
+      Static checks already passed; your job is to confirm the running app
+      actually works - the bugs typecheck/lint/build cannot see.
+
+      ## STEP 0 - Read the prior artifacts (REQUIRED)
+
+      Use the Read tool to open:
+      1. `$ARTIFACTS_DIR/integration-summary.md` - the stack, routes, and API
+         endpoints to exercise.
+      2. `$ARTIFACTS_DIR/resolution-summary.md` - if it ends "NOT READY:
+         <reason>", do NOT smoke a broken build. Write a smoke-summary noting it
+         was skipped, and end your turn.
+
+      The `agent-browser` skill is loaded - use it to drive a real browser. If
+      it is unavailable on this machine, fall back to curl-only checks (routes +
+      status codes + API) and say so in the summary.
+
+      ## Start the app
+
+      Pick a free port (try 3100, increment if busy). Start the dev server in
+      the BACKGROUND on that port, redirecting output to a log file. Never
+      foreground it - it blocks. Poll the root until it responds (up to ~60s).
+      If it never comes up, capture the log tail as a DEFECT and stop.
+
+      ## Drive the app
+
+      - Open each main route. Wait for network idle plus a few seconds (dev-mode
+        hydration lags). Confirm it renders STYLED with no console errors - a
+        200 is NOT enough. A blank, unstyled, or collapsed page (e.g. from a
+        broken CSS content glob) is a DEFECT even though it loads. Screenshot
+        each page and actually look at it.
+      - Exercise the primary interaction (the main button/form/action). Confirm
+        the UI updates and, if it hits an API, the server state actually changes
+        (verify with curl).
+      - Hit one clearly-invalid route and confirm a real 404, not a soft 200.
+      - curl the key API endpoints and confirm sane status codes.
+
+      Save screenshots into `$ARTIFACTS_DIR/smoke-shots/`. Then kill the server
+      process and free the port. Do not cry wolf - rule out hydration timing and
+      your own rate-limiting before recording a defect.
+
+      ## Output
+
+      Write `$ARTIFACTS_DIR/smoke-summary.md` with each route + status code, each
+      interaction + result, any console errors, and a final verdict line:
+      `SMOKE: PASS`, or `SMOKE: DEFECTS` followed by each defect (what you did,
+      expected vs actual, the file most likely responsible). Do not silently
+      pass real runtime bugs.
+
+      ## Final turn
+
+      End with: "Wrote $ARTIFACTS_DIR/smoke-summary.md. Verdict: <SMOKE: PASS |
+      SMOKE: DEFECTS (N)>." Never end silently.
+
+  # ───────────────────────────────────────────────────────────────
+  # PHASE 7: DEPLOY  (Opus - runs whatever SECTION C specifies)
   # Reads resolution-summary.md to confirm validation is clean before
   # deploying. Generic deployment node - plan picks the actual target.
   # ───────────────────────────────────────────────────────────────
   - id: deploy
     provider: claude
     model: opus
-    depends_on: [fix-validation]
+    depends_on: [smoke]
     context: fresh
     skills:
       - clerk-cli       # capability - engage only if SECTION C uses `clerk deploy`
@@ -492,7 +560,7 @@ nodes:
       <target>. Status: <deployed | skipped | failed>." Never end silently.
 
   # ───────────────────────────────────────────────────────────────
-  # PHASE 7: FINALIZE
+  # PHASE 8: FINALIZE
   # ───────────────────────────────────────────────────────────────
   - id: finalize
     depends_on: [deploy]
@@ -511,5 +579,6 @@ nodes:
       else
         echo "Validation:  $ARTIFACTS_DIR/validation-summary.md (clean)"
       fi
+      echo "Smoke:       $ARTIFACTS_DIR/smoke-summary.md"
       echo "Deploy:      $ARTIFACTS_DIR/deploy-summary.md"
     timeout: 30000
