@@ -2,7 +2,7 @@
 
 A mixed-provider workflow for building beautiful, full-stack web apps by routing each phase of the build to the model that earns its tokens at that step.
 
-> [!TIP]
+> [TIP]
 > **Don't want to set this up by hand? Ask your coding agent to do it.** Point Claude Code (or any agent) at this repo and say *"set up frontend-mix for me."* It can install the skills, copy the design skill into Pi, and walk you through the OpenRouter + Pi config below. The whole thing is just files and CLI commands an agent can run.
 
 - **Opus 4.8** plans the architecture, page copy, integrations, and deploy target.
