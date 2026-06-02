@@ -17,7 +17,10 @@ never seen each other's context hand off cleanly because they both read the same
 
 ```
 spec.md                                          ← the input brief (Section A/B/C intent)
-  │  frontend-mix-plan        (Claude Code, Opus)
+  │  frontend-mix-explore     (Claude Code, Sonnet)
+  ▼
+artifacts/context.md                             ← repo state · framework rec · spec path · open decisions
+  │  frontend-mix-plan        (Claude Code, Opus)    reads context.md + the spec it points to
   ▼
 artifacts/plan.md                                ← SECTION A content brief · B integration scope · C deploy
   │  frontend-mix-design      (Pi, Gemini 3.5 Flash)   reads SECTION A only
@@ -44,7 +47,7 @@ artifacts/deploy-summary.md                      ← local-only for this build
 
 | Step | Skill | Model | Artifact |
 |------|-------|-------|----------|
-| 0 | (explore, baked into plan) | Sonnet | `artifacts/context.md` |
+| 0 | `frontend-mix-explore` | Sonnet | `artifacts/context.md` |
 | 1 | `frontend-mix-plan` | Opus | `artifacts/plan.md` |
 | 2 | `frontend-mix-design` | Gemini 3.5 Flash (via Pi) | `artifacts/ui-summary.md` |
 | 3 | `frontend-mix-integrate` | Opus | `artifacts/integration-summary.md` |

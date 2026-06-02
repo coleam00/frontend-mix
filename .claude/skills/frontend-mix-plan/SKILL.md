@@ -1,25 +1,28 @@
 ---
 name: frontend-mix-plan
-description: Plan a full-stack web application by producing a three-section spec (UI / Integration / Deployment) that downstream provider-specific sessions can execute. Use this skill in a Claude Code session running Opus when you want to plan a build that will be implemented by mixing providers - Gemini designing the UI from your copy, Opus wiring the integrations. Triggers on "plan a frontend", "plan the app for mixed-provider build", "frontend-mix plan", or when given a spec markdown to turn into an actionable plan.
-argument-hint: <spec.md path | free-form description of the app> [run-name]
+description: Plan a full-stack web application by producing a three-section spec (UI / Integration / Deployment) that downstream provider-specific sessions can execute. Run this skill in a Claude Code session on Opus, AFTER frontend-mix-explore has produced a context.md. Pure planning - it reads the context handoff (and the spec it points to) and turns it into an actionable plan. Triggers on "plan a frontend", "plan the app for mixed-provider build", "frontend-mix plan", or when given a context.md to turn into a plan.
+argument-hint: <context.md path>
 ---
 
 # Frontend-Mix · Plan
 
 You are the **planning** step of a manual mixed-provider build. Reasoning-heavy work. Take your time and get the structure right - the cost of a bad plan compounds through every downstream session.
 
+The exploration is already done. The `frontend-mix-explore` step ran first and wrote a `context.md` for you. **Do not re-explore the repo from scratch** - read the context handoff and the spec it points to, then plan.
+
 ## What to do
 
-1. Look at `$ARGUMENTS`. It's one of:
-   - **An absolute path to a spec markdown file** - use the Read tool to open it end-to-end. Read it twice (first pass for structure, second pass for intent).
-   - **A free-form description of an app to build** - treat it as your spec directly. No file to read.
-   - **A spec path followed by a run-name slug**, space-separated - use the path as the spec and the second token as the run-name (skip step 2's auto-derivation).
+1. Look at `$ARGUMENTS`. It is the path to the `<run-name>-context.md` that the explore step wrote. Use the Read tool to open it end-to-end.
 
-   If `$ARGUMENTS` looks empty or unintelligible, ask the user what they want to build before continuing. Do not invent requirements.
+   If `$ARGUMENTS` is empty or the path doesn't resolve, ask the user for the context.md path (or to run `/frontend-mix-explore` first). Do not invent requirements.
 
-2. Pick a run-name slug if one wasn't provided. Derive it from the spec contents (kebab-case, ~3-5 words, e.g. `acme-saas-landing`, `archon-benchmarking-dashboard`). The run-name threads through every downstream skill via the artifact filenames, so make it short and descriptive.
+2. The filename in `$ARGUMENTS` carries your run-name. Strip the directory and the `-context.md` suffix. Example: `.claude/artifacts/acme-saas-landing-context.md` → run-name = `acme-saas-landing`. You'll reuse it to name your output file so the next skill in the chain can find it.
 
-3. Examine the current repo with Read / Glob / Grep so the plan fits what already exists (framework, package manager, existing components).
+3. Read the spec the context points to. The context.md has a `## Spec Path` section:
+   - If it names a spec file, use the Read tool to open that spec end-to-end. Read it twice (first pass for structure, second pass for intent).
+   - If it says "none - description only", the full requirements live in the context's `## Spec Summary` - treat that as your spec.
+
+4. Lean on the context's `## Repo State`, `## Framework Recommendation`, and `## Open Decisions` so the plan fits what already exists (framework, package manager, existing components). Only spot-check the repo with Read / Glob if the context left something genuinely ambiguous - don't redo the full exploration.
 
 ## Output
 
